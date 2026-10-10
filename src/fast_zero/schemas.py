@@ -13,8 +13,11 @@ class UserPublic(BaseModel):
     email: EmailStr
 
 
-class UserList(BaseModel):
-    users: list[UserPublic] = []
+class UserDB(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+    password: str
 
 
 class Message(BaseModel):
