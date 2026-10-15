@@ -2,8 +2,7 @@ from http import HTTPStatus
 
 from fastapi import FastAPI, HTTPException
 
-from fast_zero.schemas import UserPublic, UserSchema, UserDB, Message
-
+from fast_zero.schemas import Message, UserDB, UserList, UserPublic, UserSchema
 
 app = FastAPI()
 
@@ -14,6 +13,23 @@ database = []
 @app.get('/', status_code=HTTPStatus.OK, response_model=Message)
 def read_root():
     return {'message': 'Olá Mundo!'}
+
+
+@app.get('/users', status_code=HTTPStatus.OK, response_model=UserList)
+def read_users():
+    return {'user': database}
+
+
+@app.get(
+    '/users/{user_id}', status_code=HTTPStatus.OK, response_model=UserPublic
+)
+def get_user(user_id: int):
+    if user_id <= 0 or user_id > len(database):
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='User not found'
+        )
+
+    return database[user_id - 1]
 
 
 @app.post('/users/', status_code=HTTPStatus.CREATED, response_model=UserPublic)
@@ -32,14 +48,19 @@ def create_user(user: UserSchema):
     user_id = len(database) + 1
     user_db = UserDB(id=user_id, **user.model_dump())
     database.append(user_db)
-    return {'id': user_db.id, 'username': user_db.username, 'email': user_db.email}
+    return {
+        'id': user_db.id,
+        'username': user_db.username,
+        'email': user_db.email,
+    }
 
 
 @app.put('/users/{user_id}', status_code=HTTPStatus.OK)
 def update_user(user_id: int, user: UserSchema):
     if user_id <= 0 or user_id > len(database):
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND,
-                            detail='User not found')
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='User not found'
+        )
 
     existing_user = database[user_id - 1]
 
@@ -63,4 +84,15 @@ def update_user(user_id: int, user: UserSchema):
     return {'username': existing_user.username, 'email': existing_user.email}
 
 
-updade_user = update_user
+@app.delete(
+    '/users/{user_id}', status_code=HTTPStatus.OK, response_model=Message
+)
+def delete_user(user_id: int):
+    if user_id <= 0 or user_id > len(database):
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='User not found'
+        )
+
+    del database[user_id - 1]
+    return {'message': 'User deleted'}
+
