@@ -22,3 +22,7 @@ class UserDB(BaseModel):
 
 class Message(BaseModel):
     message: str
+
+
+class UserList(BaseModel):
+    user: list[UserPublic]
