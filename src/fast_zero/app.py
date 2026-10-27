@@ -95,4 +95,3 @@ def delete_user(user_id: int):
 
     del database[user_id - 1]
     return {'message': 'User deleted'}
-

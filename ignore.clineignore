@@ -1,0 +1,21 @@
+# Ambiente e dependências
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Cache de testes e ferramentas
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Base de dados e segredos
+*.db
+*.sqlite3
+.env
+.env.*
+
+# Git e build
+.git/
+dist/
+build/
