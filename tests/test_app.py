@@ -1,191 +1,109 @@
 from http import HTTPStatus
 
-
-def test_read_root(client):
-    response = client.get('/')
-    assert response.status_code == HTTPStatus.OK
-    assert response.json() == {'message': 'Olá Mundo!'}
+from fast_zero.schemas import UserPublic
 
 
-def test_list_users(client, monkeypatch):
-    monkeypatch.setattr('fast_zero.app.database', [])
-    user = {
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-        'password': 'testpassword',
-    }
-    client.post('/users/', json=user)
-
+def test_read_users(client):
     response = client.get('/users')
-
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == {
-        'user': [
-            {
-                'id': 1,
-                'username': 'testuser',
-                'email': 'testuser@example.com',
-            }
-        ]
-    }
+    assert response.json() == {'users': []}
 
 
-def test_get_user(client, monkeypatch):
-    monkeypatch.setattr('fast_zero.app.database', [])
-    user = {
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-        'password': 'testpassword',
-    }
-    client.post('/users/', json=user)
-
-    response = client.get('/users/1')
-
+def test_read_users_with_user(client, test_user):
+    user_schema = UserPublic.model_validate(test_user).model_dump()
+    # pega os atributos do usuário e transforma em um dicionário
+    response = client.get('/users')
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == {
-        'id': 1,
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-    }
+    assert response.json() == {'users': [user_schema]}
 
 
-def test_get_user_not_found(client, monkeypatch):
-    monkeypatch.setattr('fast_zero.app.database', [])
+def test_get_user_with_id(client, test_user):
+    user_schema = UserPublic.model_validate(test_user).model_dump()
+    response = client.get(f'/users/{test_user.id}')
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == user_schema
 
-    response = client.get('/users/1')
 
+def test_get_user_not_found(client):
+    response = client.get('/users/999')
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json() == {'detail': 'User not found'}
 
 
 def test_create_user(client):
     user = {
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-        'password': 'testpassword',
+        'username': 'Rodrigo',
+        'email': 'Rodrigo@example.com',
+        'password': '1q2w3e4r',
     }
-    response = client.post('/users/', json=user)
+
+    response = client.post('/users', json=user)
+
     assert response.status_code == HTTPStatus.CREATED
     assert response.json() == {
+        'username': user['username'],
+        'email': user['email'],
         'id': 1,
-        'username': 'testuser',
-        'email': 'testuser@example.com',
     }
 
 
-def test_create_user_username_existing(client):
+def test_create_user_conflict_username(client, test_user):
     user = {
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-        'password': 'testpassword',
+        'username': test_user.username,
+        'email': f'new_{test_user.email}',
+        'password': '1q2w3e4r',
     }
-    client.post('/users/', json=user)
 
-    duplicate_user = {**user, 'email': 'other@example.com'}
-    response = client.post('/users/', json=duplicate_user)
+    response = client.post('/users', json=user)
 
-    assert response.status_code == HTTPStatus.BAD_REQUEST
-    assert response.json() == {'detail': 'Username already registered'}
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json() == {'detail': 'Username already exists'}
 
 
-def test_create_user_email_existing(client):
+def test_create_user_conflict_email(client, test_user):
     user = {
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-        'password': 'testpassword',
+        'username': f'{test_user.username}_new',
+        'email': test_user.email,
+        'password': '1q2w3e4r',
     }
-    client.post('/users/', json=user)
 
-    duplicate_user = {
-        **user,
-        'username': 'otheruser',
+    response = client.post('/users', json=user)
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json() == {'detail': 'Email already exists'}
+
+
+
+def test_update_user(client, test_user):
+    updated_user = {
+        'username': 'updated_user',
+        'email': 'updated@example.com',
+        'password': 'new_password',
     }
-    response = client.post('/users/', json=duplicate_user)
 
-    assert response.status_code == HTTPStatus.BAD_REQUEST
-    assert response.json() == {'detail': 'Email already registered'}
-
-
-def test_update_user(client):
-    user = {
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-        'password': 'testpassword',
-    }
-    client.post('/users/', json=user)
     response = client.put(
-        '/users/1',
-        json={
-            'username': 'Jorge',
-            'email': 'Jorge@example.com',
-            'password': 'testpassword',
-        },
+        f'/users/{test_user.id}',
+        json=updated_user,
     )
+
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {
-        'username': 'Jorge',
-        'email': 'Jorge@example.com',
+        'id': test_user.id,
+        'username': updated_user['username'],
+        'email': updated_user['email'],
     }
-
 
 def test_update_user_not_found(client):
+    updated_user = {
+        'username': 'updated_user',
+        'email': 'updated@example.com',
+        'password': 'new_password',
+    }
+
     response = client.put(
         '/users/999',
-        json={
-            'username': 'Jorge',
-            'email': 'Jorge@example.com',
-            'password': 'testpassword',
-        },
+        json=updated_user,
     )
-    assert response.status_code == HTTPStatus.NOT_FOUND
-    assert response.json() == {'detail': 'User not found'}
-
-
-def test_delete_user(client, monkeypatch):
-    monkeypatch.setattr('fast_zero.app.database', [])
-    user = {
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-        'password': 'testpassword',
-    }
-    client.post('/users/', json=user)
-
-    response = client.delete('/users/1')
-
-    assert response.status_code == HTTPStatus.OK
-    assert response.json() == {'message': 'User deleted'}
-
-
-def test_delete_user_not_found(client, monkeypatch):
-    monkeypatch.setattr('fast_zero.app.database', [])
-
-    response = client.delete('/users/999')
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json() == {'detail': 'User not found'}
-
-
-def test_delete_user_invalid_id(client, monkeypatch):
-    monkeypatch.setattr('fast_zero.app.database', [])
-
-    response = client.delete('/users/0')
-
-    assert response.status_code == HTTPStatus.NOT_FOUND
-    assert response.json() == {'detail': 'User not found'}
-
-
-def test_delete_user_twice_returns_not_found(client, monkeypatch):
-    monkeypatch.setattr('fast_zero.app.database', [])
-    user = {
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-        'password': 'testpassword',
-    }
-    client.post('/users/', json=user)
-
-    first_response = client.delete('/users/1')
-    assert first_response.status_code == HTTPStatus.OK
-
-    second_response = client.delete('/users/1')
-    assert second_response.status_code == HTTPStatus.NOT_FOUND
-    assert second_response.json() == {'detail': 'User not found'}

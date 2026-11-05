@@ -1,24 +1,49 @@
 import pytest
-from fast_zero.models import User, table_registry
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import Session
+
 from fastapi.testclient import TestClient
 
+from fast_zero.models import User, table_registry
+from fast_zero.database import get_session
 from fast_zero.app import app
 
 
 @pytest.fixture
-def client():
-    return TestClient(app)
+def client(session):
+    def get_session_override():
+        return session
+
+    with TestClient(app) as client:
+        app.dependency_overrides[get_session] = get_session_override
+        yield client
+
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
 def session():
-    engine = create_engine('sqlite:///:memory:')  # conexão com o banco
+    engine = create_engine(
+        'sqlite:///:memory:',
+        connect_args={
+            'check_same_thread': False
+        },  # deixa a conexão com o banco de dados acessível a partir de múltiplas threads
+        poolclass=StaticPool,  # não fecha a conexão com o banco de dados após cada teste
+    )  # conexão com o banco
     table_registry.metadata.create_all(engine)  # criação da tabela
-    with Session(
-        engine
-    ) as session:  # instância da session com gerenciamento de contexto
+    with Session(engine) as session:
         yield session
     table_registry.metadata.drop_all(engine)
+    engine.dispose()  # fecha a conexão com o banco de dados
+
+
+@pytest.fixture
+def test_user(session):
+    user = User(
+        username='testuser', email='testuser@example.com', password='password'
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
